@@ -1,0 +1,1 @@
+home_directory=C:\cellaxa_1.0.0a

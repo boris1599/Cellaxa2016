@@ -1,0 +1,2 @@
+%home_directory%/backend/bin/psql.exe -h localhost -U postgres -d postgres -p 5432 -W -q  -f  %home_directory%/frontend/scripts/install_script.sql -a -e -L %home_directory%/frontend/logs/metadata_install.txt"  
+pause

@@ -1,0 +1,1037 @@
+
+select '*****************************************************************';
+select 'Application Installation Components on'||' '||current_timestamp;
+select '*****************************************************************';
+
+\pset pager off
+set client_min_messages to warning;
+----set client_min_messages to info;
+
+
+create user cellaxa with password 'cellaxa';
+
+grant all privileges on database "postgres" to cellaxa;	
+
+create user junk with password 'junk';
+
+grant all privileges on database "postgres" to junk;
+
+grant select, update, delete on all tables in schema public to junk;
+
+grant select, update on all sequences in schema public to junk;
+
+SET SESSION AUTHORIZATION cellaxa;
+
+SELECT SESSION_USER, CURRENT_USER;
+
+begin;
+
+
+create sequence _$cxa_frm_seq
+INCREMENT  BY 100
+     MINVALUE 1 NO MAXVALUE 
+    START  WITH 1000  CACHE 1000 NO CYCLE; 
+
+create sequence _$cxa_object_seq
+INCREMENT  BY 1
+     MINVALUE 1 NO MAXVALUE 
+    START  WITH 100  CACHE 1000 NO CYCLE; 
+
+create sequence _$cxa_element_seq
+INCREMENT  BY 100
+     MINVALUE 1 NO MAXVALUE 
+    START  WITH 1000  CACHE 1000 NO CYCLE; 
+
+---------------------------
+create table _$cxa_clients
+(
+client_id   int primary key,
+ crt_date    date default clock_timestamp()
+);
+
+insert into _$cxa_clients (client_id) values (1234);
+
+
+
+--------------------------
+
+create table _$cxa_servers
+(server_id 	int 		primary key 	default 	nextval('_$cxa_object_seq'),
+ server_name 	varchar(50) 			default 	'LOCALHOST',
+ server_type   	varchar(20) 			default 	'LOCAL', 
+ admin_id 	int  				default 	nextval('_$cxa_object_seq'),
+ admin_name 	varchar(100) 	unique, 
+ admin_password     varchar(250)    	not null,
+ c_parameters 	varchar(100),
+ crt_datetime   	timestamp 			default clock_timestamp(),
+ upd_datetime 	timestamp 			default clock_timestamp()
+);
+
+insert into _$cxa_servers
+(admin_name,
+ admin_password
+)
+values
+(
+ 'CELLAXA',
+ 'TEMP_PASSWORD'
+);
+
+select * from _$cxa_servers; 
+
+create table _$cxa_users
+(server_id 	int 		references 	_$cxa_servers (server_id),
+ user_id 		int 		primary key 	default 	nextval('_$cxa_object_seq'),
+ user_name 	varchar(250)    	not null,
+ user_level     	varchar(5)      	not null 		default ('USER'),
+ password 	varchar(250)    	not null                         unique,
+ crt_datetime 	timestamp 			default clock_timestamp(),
+ upd_datetime 	timestamp 			default clock_timestamp()
+);
+-------------------------------
+create or replace function encipher
+(
+p_string text 
+) returns text 
+AS
+$$
+declare
+    p_key                                         text           := '23H%$675)(*HH!@?><';
+    c_key_length                            int := 10;
+    v_key                                          text := substring(p_key,1,c_key_length*2);
+    v_key_length                            int;
+    v_result                                      text := '';
+    v_each_byte                             int;
+    v_each_key_byte                     int;
+    v_result_length                         int;
+    curr_char                                   text      := null;
+    p_string_x                                 text;
+
+string_out text := 'abcdefgklmaq';
+start_r int;
+start_l int;
+length_out int;
+
+new_string       text := '';
+token_r            char(1) :=  ''; 
+token_l            char(1) := '';
+
+begin
+
+
+string_out := p_string;
+
+if mod(length(string_out),2) = 0 then
+
+string_out := string_out||'XYZ123';
+
+end if;
+
+raise NOTICE 'Initial string %', string_out;
+
+length_out := length(string_out);
+-----raise NOTICE 'length %', length_out;
+
+for i in 0 .. length_out loop
+
+start_r := length_out - i;
+token_r := substring(string_out, start_r,1);
+
+new_string := new_string||token_r;
+
+-----raise NOTICE 'New length %', length(new_string);
+
+if length(new_string) -1 = length_out then
+exit;
+end if;
+
+
+start_l := i + 1;
+token_l := substring(string_out, start_l,1);
+
+new_string := new_string||token_l;
+
+
+----if start_r = start_l then
+----exit;
+-----end if;
+
+
+
+end loop;
+
+---- raise NOTICE 'New string %', substring(new_string, 1, length(new_string)- 1);
+
+
+
+  p_string :=  substring(new_string, 1, length(new_string)- 1);
+ 
+  p_string := replace (p_string, '0','a');
+  p_string := replace (p_string, '1','B');
+  p_string := replace (p_string, '2','c');
+  p_string := replace (p_string, '3','Z');
+  p_string := replace (p_string, '4','a');
+  p_string := replace (p_string, '5','Y');
+  p_string := replace (p_string, '6','B');
+  p_string := replace (p_string, '7','c');
+  p_string := replace (p_string, '8','H');
+  p_string := replace (p_string, '9','K');
+
+  p_string := lower(p_string);
+
+RAISE NOTICE 'Input %', p_string;
+  --
+  -- Make sure the key is at least 'c_key_length' chars long with some random junk
+  --
+    while length(v_key) < c_key_length loop
+      v_key := v_key || '@1Z8F$'  || v_key;
+    end loop;
+
+   v_key_length := length(v_key);
+
+    v_key := substring(v_key,1,c_key_length);
+
+raise NOTICE 'Here v_key %', v_key;
+  --
+  -- For each char in the string
+  --
+    for i in 1 .. length(p_string) loop
+  --
+  -- get the ascii vals of the char, and its equivalent in the key
+  --
+        v_each_byte := ascii(substring(p_string,i,1));
+        v_each_key_byte := ascii(substring(v_key,mod(i,c_key_length)+1,1));
+
+-----raise notice 'v_each_byte %',v_each_byte;
+-----raise notice 'v_each_key_byte %', v_each_key_byte;
+
+  --
+  -- xor the two ascii values and convert back to a char byte
+  --
+-----     v_result :=  v_result ||
+-----         chr(v_each_byte + v_each_key_byte - 2*bitand(v_each_byte,v_each_key_byte));
+ 
+
+v_result :=  v_result || chr(v_each_byte  - v_each_key_byte );
+  
+
+-------raise notice '%', v_result;
+
+ end loop;
+--------------------
+
+v_result := replace(v_result,'''','''''');
+--------------
+return v_result;
+end;
+$$ language plpgsql;
+-----------------------
+insert into _$cxa_users
+(
+server_id,
+user_id,
+user_name,
+user_level,
+password
+)
+select server_id, admin_id,  admin_name, 'ADMIN', encipher('cellaxa') from _$cxa_servers
+where admin_name = 'CELLAXA';
+
+select * from _$cxa_users; 
+-------------------------------------------------
+create table _$cxa_sessions
+(
+client_id   int references _$cxa_clients (client_id),
+user_id    int  references _$cxa_users (user_id), 
+session_id int  primary key,
+active_flag char(1) default 'Y',
+crt_date date default clock_timestamp()
+);
+
+insert into _$cxa_sessions (client_id, user_id, session_id) values (1234, 101, 100);
+
+create table _$cxa_statements
+(
+session_id int references _$cxa_sessions (session_id),
+statement_id int primary key,
+crt_date date default clock_timestamp()
+);
+
+insert into _$cxa_statements (session_id, statement_id) values (100, 9101112);
+------------------------------------------------
+create or replace function general_connect
+(
+client_id_in int default 0,
+out client_id_out int,
+out return_code int,
+out session_id_out int,
+out message_out text
+)
+as
+$$
+declare
+------session_id_out  int :=0;
+client_exists int := 0;
+begin
+
+session_id_out := 0;
+
+if client_id_in = 0 then
+
+client_id_out := nextval('_$cxa_object_seq');
+
+insert into _$cxa_clients (client_id) values (client_id_out); 
+
+return_code := 0;
+message_out := 'Connected as a new client';
+
+else
+
+select count(client_id) into client_exists from _$cxa_clients where
+client_id = client_id_in;
+
+if client_exists = 0 then
+return_code := -1;
+message_out := 'Invalid client identification';
+else
+ 
+select coalesce(max(session_id),0) 
+into session_id_out 
+from 
+_$cxa_sessions where client_id = client_id_in and active_flag = 'Y'; 
+
+----raise NOTICE 'Session Id %', session_id_out;
+
+if session_id_out = 0 then
+return_code := 0;
+client_id_out := client_id_in;
+message_out := 'Existing client connected. No active sessions detected.';
+end if;
+
+if session_id_out <> 0 then
+
+return_code := 0;
+client_id_out := client_id_in;
+message_out := 'Previously existing client connected. The last sessions detected.';
+
+end if;
+end if;
+end if;
+
+end;
+
+$$
+language plpgsql;
+-------------------------------------------------
+create table _$CXA_data_types (
+dt 			int 	primary key, 
+cxa_data_type 		text             unique, 
+native_data_type 		text);
+
+insert into _$CXA_data_types values (1,		'number',		'numeric');
+insert into _$CXA_data_types values (2,		'string',		'text');
+insert into _$CXA_data_types values (3,		'date',                     	'date');
+insert into _$CXA_data_types values (4,		'date_time',	'timestamp');
+insert into _$CXA_data_types values (5,		'date_time_tz', 	'timestamptz');
+insert into _$CXA_data_types values (6,		'time', 		'time');
+insert into _$CXA_data_types values (7,		'time_tz', 		'timetz');
+------------------------------------------------------
+insert into _$CXA_data_types values  (8,		'set_id',		'text'); 
+insert into _$CXA_data_types values  (9,		'element_id', 	'text');
+insert into _$CXA_data_types values  (10, 	'any', 		'text'); /* any data types */ ----------- TEXT ????
+
+select * from _$CXA_data_types;
+
+create table _$CXA_structures (
+struct_code 	int, 
+struct_descr 	text
+);
+
+insert into _$CXA_structures values (0, 'Singleton');
+insert into _$CXA_structures values (1,'Unordered Homogenous List');
+insert into _$CXA_structures values (2 ,'Ordered Homogenous List');
+insert into _$CXA_structures values (3,'Unordered Heterogeneous List');
+insert into _$CXA_structures values (4,'Ordered Heterogeneous List');
+insert into _$CXA_structures values (5,'Linked List');
+insert into _$CXA_structures values (6,'Double Linked List');
+insert into _$CXA_structures values (7, 'Record');
+insert into _$CXA_structures values (8, 'Record Plus');
+insert into _$CXA_structures values (9,'Table of records (relational table)');
+insert into _$CXA_structures values (10,'Table of records Plus (relational table extended)'); 
+insert into _$CXA_structures values (11,'Unbalanced Tree');
+insert into _$CXA_structures values (12,'Balanced Tree'); 
+insert into _$CXA_structures values (13,'Bulk');
+insert into _$CXA_structures values (14, 'Graph');
+
+select * from _$CXA_structures;
+
+create table _$CXA_components
+(
+descr 		text,
+data_type 	int
+);
+
+insert into _$CXA_components values ('sequence', 1);
+insert into _$CXA_components values ('identifier', 1);
+insert into _$CXA_components values ('comprehention', 1);
+insert into _$CXA_components values ('payload_num', 1);
+insert into _$CXA_components values ('payload_str', 2);
+insert into _$CXA_components values ('payload_timestamp', 3);
+insert into _$CXA_components values ('payload_timestamp_z', 4);
+insert into _$CXA_components values ('payload_date_time', 5);
+insert into _$CXA_components values ('payload_date_time_z', 6);
+insert into _$CXA_components values ('payload_set_id', 7);
+insert into _$CXA_components values ('payload_element', 8);
+
+
+select * from _$CXA_components;
+
+
+create table _$cxa_blocks_inventory
+(
+user_id			int,
+user_level                                      text		default 'U',
+block_id			int 		primary key,
+block_name		text		unique,
+s			char(1)		default 'Y',
+i			char(1)		default 'Y',
+c			char(1)		default 'Y',
+p			char(1)		default 'Y',
+pl                                                     char(2)                         default 'N',
+cxa_data_type		text		references _$cxa_data_types (cxa_data_type),   
+native_data_type		text		,
+crt_date			timestamp		default clock_timestamp()
+);
+
+
+/****************************************************************/
+
+
+--------------------------/***************
+DO language plpgsql $$
+declare 
+
+pl      				record;   ---------- retrieval user_id from _$cxa_data_types
+
+user_id_out                 	      	int;
+block_id_out                   	      	int; 
+block_name_gen	             	 	text;
+
+payload_data_type                      		text;
+
+cxa_data_type_in                                            text;
+native_data_type_in			text;
+
+statement                   			text;       ------------ create block table statement
+
+
+
+BEGIN  
+
+-------------------------------------------------------------------------------------
+select user_id 
+into 
+user_id_out
+       from _$CXA_users where 
+user_name = 'CELLAXA' and 
+user_level = 'ADMIN';
+
+/************************************ Full blocks. Not pooled *************/
+
+ FOR pl IN select * from _$cxa_data_types order by dt
+
+    loop
+
+block_id_out		:= nextval('_$cxa_object_seq');
+block_name_gen		:= 'S'||block_id_out;
+
+  
+       cxa_data_type_in   	:= pl.cxa_data_type;
+       native_data_type_in	:= pl.native_data_type;
+
+       payload_data_type	 := pl.native_data_type;
+
+      statement := 
+'create table '||quote_ident(block_name_gen)||' ( s int, i int, c int, p ' || pl.native_data_type ||')';
+  
+ raise notice '%', statement; 
+
+       execute  statement;
+
+ insert into _$CXA_blocks_inventory 
+      (
+user_id		,	
+user_level                   ,                  
+block_id		,	
+block_name	,	
+cxa_data_type	,	   
+native_data_type	
+ )	
+values 
+(user_id_out,
+'A', 
+block_id_out,
+block_name_gen,
+cxa_data_type_in,   
+ native_data_type_in
+);
+
+end loop;
+
+/************************************  Full blocks. Pooled ************/
+
+
+ FOR pl IN select * from _$cxa_data_types order by dt
+
+    loop
+
+block_id_out		:= nextval('_$cxa_object_seq');
+block_name_gen		:= 'S'||block_id_out;
+
+  
+       cxa_data_type_in   	:= pl.cxa_data_type;
+       native_data_type_in	:= pl.native_data_type;
+
+-------       payload_data_type	 := pl.native_data_type;
+
+      statement := 
+'create table '||quote_ident(block_name_gen)||' ( s int, i int, c int,  p int)';
+ 
+ raise notice '%', statement; 
+
+ execute  statement;
+
+ insert into _$CXA_blocks_inventory 
+      (
+user_id		,	
+user_level                   ,                  
+block_id		,	
+block_name	,	
+cxa_data_type	,	   
+native_data_type       ,
+pl	
+ )	
+values 
+(user_id_out,
+'A', 
+block_id_out,
+block_name_gen,
+cxa_data_type_in,   
+native_data_type_in,
+'Y'
+);
+  
+ end loop;
+
+/***************************************** Null blocks *********************/
+ FOR pl IN select * from _$cxa_data_types order by dt
+
+    loop
+
+block_id_out		:= nextval('_$cxa_object_seq');
+block_name_gen		:= 'S'||block_id_out;
+
+  
+       cxa_data_type_in   	:= pl.cxa_data_type;
+       native_data_type_in	:= pl.native_data_type;
+
+-------       payload_data_type	 := pl.native_data_type;
+
+      statement := 
+'create table '||quote_ident(block_name_gen)||' ( s int, i int, c int)';
+ 
+ raise notice '%', statement; 
+
+ execute  statement;
+
+ insert into _$CXA_blocks_inventory 
+      (
+user_id		,	
+user_level                   ,                  
+block_id		,	
+block_name	,	
+cxa_data_type	,	   
+native_data_type       ,
+P,
+PL
+ )	
+values 
+(user_id_out,
+'A', 
+block_id_out,
+block_name_gen,
+cxa_data_type_in,   
+native_data_type_in,
+'N',
+'NA'
+);
+  
+ end loop;
+
+
+END$$;
+
+create table _$CXA_syntax (c int, c_name text, c_data_type int, block_name text);
+
+insert into _$CXA_syntax values (1, 'set_id',                        1, 's1002_1_sicp');
+insert into _$CXA_syntax values (2, 'set_struct',                 1, 's1002_1_sicp');
+insert into _$CXA_syntax values (3, 'set_name',                  2, 's1003_2_sicp');
+insert into _$CXA_syntax values (4, 'set_alt_name',            2, 's1003_2_sicp');
+insert into _$CXA_syntax values (5, 'set_description',         2, 's1003_2_sicp'); 
+insert into _$CXA_syntax values (6,  'set_to_sub_lnk' ,       7, 's1009_7_sicpp');
+insert into _$CXA_syntax values (7,  'set_to_super_lnk',    7, 's1009_7_sicpp');
+insert into _$CXA_syntax values (8,  'set_ctd_date',           5, 's1006_5_sicp');
+insert into _$CXA_syntax values (9,  'set_upd_date',          5, 's1006_5_sicp');
+insert into _$CXA_syntax values (10, 'data_holder_block', 2, 's1002_2_sicp');
+insert into _$CXA_syntax values (11, 'sub_set_flag',           1, 's1002_1_sicp');
+insert into _$CXA_syntax values (12, 'super_set_flag',        1, 's1002_1_sicp');
+insert into _$CXA_syntax values (13, 'set_member_data_type', 2, 's1002_1_sicp');
+
+
+----------------------------**************************/
+
+create table _$cxa_str 
+(id numeric primary key, 
+ val text unique, 
+ val_length int, 
+crt_date timestamp default clock_timestamp());
+------
+create table _$cxa_str_token 
+(t_id numeric primary key, 
+token text unique, 
+crt_date timestamp default clock_timestamp());
+------
+create table _$cxa_str_map 
+(id numeric references    _$cxa_str (id), 
+t_id numeric  references _$cxa_str_token (t_id)
+);
+-------
+create table _$cxa_str_navigator
+(
+id numeric references _$cxa_str (id),
+block_id int references _$cxa_blocks_inventory (block_id),
+crt_date timestamp default clock_timestamp() 
+);
+
+--------------------------
+-------------------------- Pools
+
+create table _$cxa_num 
+(id numeric primary key, 
+ val numeric unique, 
+ crt_date timestamp default clock_timestamp());
+------
+create table _$cxa_num_navigator
+(
+id numeric references _$cxa_num (id),
+block_id int references _$cxa_blocks_inventory (block_id),
+crt_date timestamp default clock_timestamp() 
+);
+-----------------------------
+-----------------------------
+
+create table _$cxa_date
+(id numeric primary key, 
+ val timestamptz unique, 
+ crt_date timestamp default clock_timestamp());
+------
+create table _$cxa_date_navigator
+(
+id numeric references _$cxa_date (id),
+block_id int references _$cxa_blocks_inventory (block_id),
+crt_date timestamp default clock_timestamp() 
+);
+
+-------------------------------
+------------------------------
+create table _$cxa_set_id
+(id numeric primary key, 
+ val text unique, 
+ crt_date timestamp default clock_timestamp());
+------
+create table _$cxa_set_id_navigator
+(
+id numeric references _$cxa_set_id (id),
+block_id int references _$cxa_blocks_inventory (block_id),
+crt_date timestamp default clock_timestamp() 
+);
+
+-------------------------------
+------------------------------
+create table _$cxa_element_id
+(id numeric primary key, 
+ val text unique, 
+ crt_date timestamp default clock_timestamp());
+------
+create table _$cxa_element_id_navigator
+(
+id numeric references _$cxa_element_id (id),
+block_id int references _$cxa_blocks_inventory (block_id),
+crt_date timestamp default clock_timestamp() 
+);
+
+create view _$cxa_navigator as
+select t1.id, t2.block_id, t2.block_name, t2.native_data_type
+from _$cxa_str_navigator t1, _$cxa_blocks_inventory t2
+union
+select t1.id, t2.block_id, t2.block_name, t2.native_data_type
+from _$cxa_num_navigator t1, _$cxa_blocks_inventory t2
+union
+select t1.id, t2.block_id, t2.block_name, t2.native_data_type
+from _$cxa_date_navigator t1, _$cxa_blocks_inventory t2
+union
+select t1.id, t2.block_id, t2.block_name, t2.native_data_type
+from _$cxa_set_id_navigator t1, _$cxa_blocks_inventory t2
+union
+select t1.id, t2.block_id, t2.block_name, t2.native_data_type
+from _$cxa_element_id_navigator t1, _$cxa_blocks_inventory t2;
+
+/**********************************************************/
+
+create or replace function crt_user 
+(
+curr_user_id               int,
+user_name_in 	text,
+password_in    	text,
+out return_code         int,
+out message_out 	text
+)
+as
+$$
+declare
+
+       server_id_out              int   := null;
+       how_many_users        int     := 0;
+       how_many_passwords  int    := 0;
+       user_level_out                int;
+       
+  
+begin
+
+select count(*) 
+into user_level_out 
+from _$cxa_users where user_id = curr_user_id and user_level = 'ADMIN';
+
+raise NOTICE 'User level %', user_level_out;
+
+if  user_level_out   = 0  then
+
+return_code := -1;
+message_out := 'CXA-01000. User creation is not authorized.';
+
+else
+
+message_out := '';
+
+return_code := -1;
+message_out := 'CXA-01001 User is not created.';
+
+select server_id 
+into 
+server_id_out 
+from _$cxa_servers where server_name = 'LOCALHOST';
+
+----------------------------------------------
+select count(*)
+  into 
+       how_many_users
+from   _$cxa_users 
+where upper(user_name) = upper(user_name_in); 
+---------------------------------------------------
+
+select count(*)
+  into 
+       how_many_passwords
+from   _$cxa_users 
+where password  = encipher(password_in); 
+-----------------------------------------------------------
+raise NOTICE 'How_many_users %', how_many_users;
+
+raise NOTICE 'How_many_passwords %', how_many_passwords;
+
+if how_many_users  = 0 and how_many_passwords = 0  then   ------- Create new user
+return_code := 0;
+message_out := 'User is created.';
+
+insert into _$cxa_users
+(server_id, 
+ user_id,
+ user_name,
+password
+)
+values
+(
+server_id_out,
+nextval('_$cxa_object_seq'),
+$2,
+encipher($3)
+);
+
+
+
+end if;
+--------------------------
+end if;
+
+end;
+$$
+language plpgsql;
+
+select return_code, message_out from crt_user (101, 'test_user','test_user_password');
+select return_code, message_out from crt_user (101, 'test_user1','test_user_password1');
+select return_code, message_out from crt_user (101, 'test_user2','test_user_password2');
+
+-------
+create or replace function connect
+(
+ client_id_in             int,
+ user_name_in        text,
+ password_in           text,
+out session_id_out  int,
+ out user_id_out       int,
+ out user_level_out  text,
+ out  return_code       int,
+ out  message_out    text
+)
+as
+$$
+declare
+exists_out   int   :=0;
+exists1_out int := 0;
+new_session_id int :=0;
+
+begin
+
+select count(*) into exists1_out from _$cxa_clients
+where client_id = client_id_in;
+
+if exists1_out = 0 then
+
+return_code  := -1;
+message_out := 'Cannot connect. Invalid client identification.';
+
+else
+
+
+select 
+ count(*)  
+into  
+exists_out
+from 
+_$cxa_users where 
+upper(user_name) = upper(user_name_in) and
+password                = encipher(password_in);
+
+
+          if exists_out = 0 then
+
+         return_code := -1;
+         message_out := 'Cannot connect. Invalid User and/or Password.';
+
+         else
+
+        select 
+         user_id,
+         user_level
+ into
+        user_id_out,
+        user_level_out 
+ from 
+       _$cxa_users where 
+         upper(user_name) = upper(user_name_in) and
+         password                = encipher(password_in); 
+
+         new_session_id := nextval('_$cxa_object_seq');
+
+update _$cxa_sessions set active_flag = 'N' 
+where client_id = client_id_in and
+-----            user_id = user_id_out  and
+            session_id < new_session_id;
+
+insert into _$cxa_sessions 
+(client_id,
+ user_id,
+ session_id)
+values
+(client_id_in,
+ user_id_out,
+ new_session_id);
+ 
+
+session_id_out := new_session_id;
+
+------
+return_code := 0;
+message_out := 'Connected.';
+
+end if;
+
+end if;
+
+end;
+
+$$
+
+language plpgsql;
+---------------------------------------------
+create or replace function exit
+(
+client_id_in int,
+out return_code int,
+out message_out text
+)
+as
+
+$$
+
+declare
+exists_out  int;
+
+begin
+select coalesce(count(*),0)
+into exists_out from _$cxa_clients
+where client_id = client_id_in;
+
+if exists_out = 0 then
+return_code := -1;
+message_out := 'Cannot exit. Invalid Client identification.';
+
+else
+
+update _$cxa_sessions set active_flag = 'N' where
+client_id = client_id_in;
+
+return_code := 0;
+message_out := 'Exits.';
+
+end if;
+
+end;
+
+$$
+language plpgsql; 
+  
+
+
+
+
+end;
+
+\d
+
+---------------------------------------------
+--------select 'Installationscript is executed succesfuly';
+---------------------------------------------
+
+
+/******
+create or replace function test_run()
+returns text
+as
+$$
+declare
+test_id int :=0;
+begin
+          
+          declare
+
+          client_id_out1   int;
+          return_code1    int;
+          session_id_out1   int;
+          message_out1      text;
+
+          begin
+raise INFO '**************************************';
+raise INFO 'Testing GENERAL_CONNECT()';
+raise INFO '**************************************';
+ ------------------------------------------
+select 
+          client_id_out,
+          return_code,
+          session_id_out,
+          message_out 
+into 
+         client_id_out1,
+          return_code1,
+          session_id_out1,
+          message_out1
+ from 
+         general_connect(0);
+
+      raise INFO 'Run 1.Expected OK.->%',
+     ' Ret.Code:'||return_code1||
+','||'Msg.:'||message_out1||
+','||'Client Id:'||client_id_out1||
+','||'Session Id:'||' '||session_id_out1;          
+
+------------------------------------------
+
+select 
+          client_id_out,
+          return_code,
+          session_id_out,
+          message_out 
+into 
+         client_id_out1,
+          return_code1,
+          session_id_out1,
+          message_out1
+ from 
+         general_connect(client_id_out1);
+
+      raise INFO 'Run 2.Expected OK.->%',
+     ' Ret.Code:'||return_code1||
+','||'Msg.:'||message_out1||
+','||'Client Id:'||client_id_out1||
+','||'Session Id:'||' '||session_id_out1;         
+--------------------------------------------------------
+select 
+          client_id_out,
+          return_code,
+          session_id_out,
+          message_out 
+into 
+          client_id_out1,
+          return_code1,
+          session_id_out1,
+          message_out1
+ from 
+         general_connect(1000);
+
+         client_id_out1:= coalesce(client_id_out1, 0);
+          return_code1:= coalesce(return_code1, 0); 
+          session_id_out1 := coalesce(session_id_out1,0);
+
+
+
+
+
+      raise INFO 'Run 3.Expected ERR.->%',
+     ' Ret.Code:'||return_code1||
+','||'Msg.:'||message_out1||
+','||'Client Id:'||client_id_out1||
+','||'Session Id:'||' '||session_id_out1;          
+
+
+         end;
+
+
+raise INFO '**************************************';
+raise INFO 'Testing EXIT()';
+raise INFO '**************************************';
+
+
+return 'End of test.';
+end;
+$$
+language plpgsql;
+******/
+------select * from test_run();
+
+RESET SESSION AUTHORIZATION;
+
+SELECT SESSION_USER, CURRENT_USER;
+
+
+\q
+
