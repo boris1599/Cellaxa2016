@@ -4,7 +4,7 @@ select 'Application Installation Components on'||' '||current_timestamp;
 select '*****************************************************************';
 
 \pset pager off
-set client_min_messages to warning;
+set client_min_messages to warning;   ------ COMMENT
 ----set client_min_messages to info;
 
 drop owned by cellaxa;
